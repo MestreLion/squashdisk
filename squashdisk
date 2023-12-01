@@ -1,0 +1,184 @@
+#!/bin/bash
+#
+# squashdisk - create compressed mountable disk and partition images
+#
+# This file is part of squashdisk, see <https://github.com/MestreLion/squashdisk>
+# Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+# License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
+#
+# Requirements and associated Debian/Ubuntu package:
+# - mksquashfs (squashfs-tools)
+# - pv
+# - numfmt (coreutils)
+#
+# To expose partitions: losetup
+# https://unix.stackexchange.com/questions/31669
+#------------------------------------------------------------------------------
+
+set -Eeuo pipefail  # exit on any error
+trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
+
+#------------------------------------------------------------------------------
+
+source=-  # standard input
+target=
+
+block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
+comp=zstd  # Available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
+user=root
+group=root
+mode=444
+wash=0
+
+size=0
+autosudo=1
+force=0
+
+verbose=0
+
+#------------------------------------------------------------------------------
+
+self=${0##*/}
+here=$(dirname "$(readlink -f "$0")")
+
+#------------------------------------------------------------------------------
+
+fatal()   { if (($#)); then echo "$self: error: $*" >&2; fi; exit 1; }
+message() { if (($# && verbose)); then printf '%s\n' "$1"; fi; }
+argerr()  { printf "%s: %s\n" "$self" "${1:-error}" >&2; usage 1; }
+invalid() { argerr "invalid ${2:-option}: ${1:-}"; }
+missing() { argerr "missing ${1:+$1 }argument${2:+ from $2}."; }
+sizefmt() { [[ "$1" ]] || missing "${3:-SIZE}" "${2:-}";
+            numfmt --from=auto -- "$1" || fatal; }
+escape()  { printf '%q' "$1"; }  # $@ will not work as expected
+exists()  { type "$@" >/dev/null 2>&1; }
+require() {
+	local cmd=$1
+	local pkg=${2:-$cmd}
+	local msg='' eol=''
+	if exists "$cmd"; then return; fi
+	if [[ -x /usr/lib/command-not-found ]]; then
+		/usr/lib/command-not-found -- "$cmd" || true
+		eol='\n'
+	else
+		echo "Required command '${cmd}' is not installed." >&2
+		if [[ "$pkg" != '-' ]]; then
+			msg="with:\n\tsudo apt install ${pkg}\n"
+		fi
+	fi
+	echo -e "Please install ${cmd} ${msg}and try again.${eol}" >&2
+	exit 1
+}
+
+#------------------------------------------------------------------------------
+
+usage() {
+	if [[ "${1:-}" ]] ; then exec >&2; fi
+	cat <<-USAGE
+	Usage: $self [options] [-o OUTPUT_FILE|-O OUTPUT_DIR] [SOURCE]
+	USAGE
+	if [[ "${1:-}" ]] ; then
+		cat <<- USAGE
+		Try '$self --help' for more information.
+		USAGE
+		exit 1
+	fi
+	cat <<-USAGE
+
+	Create compressed mountable disk and partition images
+
+	Options:
+	  -h|--help      - show this page.
+	  -v|--verbose   - print more details about what is being done.
+	  -f|--force     - force operation on mounted partitions or non-disk/patition inputs
+	  -S|--no-sudo   - do not use 'sudo' for reading SOURCE devices even if needed
+	  -s|--size SIZE - number of BYTES (*NOT* blocks!) to read from SOURCE.
+	                   0 means the whole input [Default: $size]
+	  -B|--block-size SIZE - read SIZE blocks at a time. [Default: $block]
+	  -c|--compressor COMP - select COMP compressor [Default: $comp]
+
+	All SIZE units are parsed through 'numfmt' auto mode, so SI suffixes such
+	as K, M, G are allowed. '1K' means 1000; use 'Ki' (and 'Mi', 'Gi', etc)
+	for 1024-based units.
+
+	Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+	License: GPLv3 or later. See <http://www.gnu.org/licenses/gpl.html>
+	USAGE
+	exit 0
+}
+
+# Pre-parse for -h|--help, ignoring if after '--'
+for arg in "$@"; do
+	if [[ "$arg" == '--' ]]; then break; fi
+	if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then usage; fi
+done
+args=()
+while (($#)); do
+	# shellcheck disable=SC2221,SC2222
+	case "$1" in
+	-f|--force  ) force=1;;
+	-S|--no-sudo) autosudo=0;;
+	-B|--block-size) shift; block=${1:-};;
+	-s|--size      ) shift; size=${1:-};;
+	-o|--output    ) shift; outfile=${1:-};;
+	-O|--output-dir) shift; outdir=${1:-};;
+	-c|--compressor) shift; comp=${1:-};;
+	--block-size=*) block=${1#*=};;
+	--size=*      ) size=${1#*=};;
+	--output=*    ) outfile=${1#*=};;
+	--output-dir=*) outdir=${1#*=};;
+	--compressor=*) comp=${1#*=};;
+	--) shift; break;;
+	-*) invalid "$1";;
+	* ) args+=( "$1" );;
+	esac
+	shift || break
+done
+args+=( "$@" )
+
+#------------------------------------------------------------------------------
+case ${#args[@]} in
+	0) ;;  # use the default "-" for source
+	1) source=${args[0]}; if [[ -z "$source" ]]; then missing SOURCE; fi;;
+	*) invalid "${args[1]}" argument;;
+esac
+
+if [[ "${outfile:-}" ]]; then
+	if [[ "${outdir:-}" ]]; then
+		argerr "--output and --output-dir are mutually exclusive"
+	fi
+	target=$outfile
+else
+	target=${outdir:-.}/disk.sqsh
+fi
+
+block=$(sizefmt "$block" '--block-size') || exit
+size=$( sizefmt "$size"  '--size'      ) || exit
+
+pvcmd=(pv --buffer-size "$block")
+if ((size)); then
+	pvcmd+=(--size "$size" --stop-at-size)
+fi
+if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; then
+	pvcmd=(sudo "${pvcmd[@]}")
+fi
+pvcmd+=(-- "$(escape "$source")")
+
+#------------------------------------------------------------------------------
+
+require mksquashfs squashfs-tools
+require pv
+require numfmt coreutils
+
+if ! ((force)); then
+	if [[ -b "$source" ]] && grep -q "^$source" /proc/mounts; then
+		fatal "$source seems to be (or contain) mounted partition(s)." \
+			"Un-mount it first or use --force."
+	fi
+fi
+
+tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
+trap 'rm -rf -- "$tmpdir"' EXIT
+
+trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
+mksquashfs "$tmpdir" "$target" -p "disk.img f $mode $user $group ${pvcmd[*]}" -info -comp "$comp"
