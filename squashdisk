@@ -138,6 +138,10 @@ done
 args+=( "$@" )
 
 #------------------------------------------------------------------------------
+require mksquashfs squashfs-tools
+require pv
+require numfmt coreutils
+
 case ${#args[@]} in
 	0) missing SOURCE;;
 	1) source=${args[0]}; if [[ -z "$source" ]]; then missing SOURCE; fi;;
@@ -168,11 +172,6 @@ pvcmd+=(-- "$(escape "$source")")
 pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
 
 #------------------------------------------------------------------------------
-
-require mksquashfs squashfs-tools
-require pv
-require numfmt coreutils
-
 if ! ((force)); then
 	if [[ -b "$source" ]] && grep -q "^$source" /proc/mounts; then
 		fatal "$source seems to be (or contain) mounted partition(s)." \
