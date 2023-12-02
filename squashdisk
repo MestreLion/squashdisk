@@ -141,6 +141,7 @@ args+=( "$@" )
 require mksquashfs squashfs-tools
 require pv
 require numfmt coreutils
+require udisksctl udisks2
 
 case ${#args[@]} in
 	0) missing SOURCE;;
@@ -154,7 +155,14 @@ if [[ "${outfile:-}" ]]; then
 	fi
 	target=$outfile
 else
-	target=${outdir:-.}/disk.sqsh
+	if [[ "$source" == '-' ]]; then
+		name=stdin
+	elif [[ -b "$source" ]]; then
+		name=$(udisksctl info -b "$source" | grep '^ *Drive:' | cut -d\' -f2)
+	else
+		name=$source
+	fi
+	target=${outdir:-.}/${name##*/}.sqsh
 fi
 
 block=$(sizefmt "$block" '--block-size') || exit
