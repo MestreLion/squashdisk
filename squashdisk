@@ -52,6 +52,7 @@ sizefmt() { [[ "$1" ]] || missing "${3:-SIZE}" "${2:-}";
             numfmt --from=auto -- "$1" || fatal; }
 escape()  { printf '%q' "$1"; }  # $@ will not work as expected
 exists()  { type "$@" >/dev/null 2>&1; }
+trace()   { local s; set -x +e; "$@"; { s=$?; set +x -e; } 2>&-; return $s; }
 require() {
 	local cmd=$1
 	local pkg=${2:-$cmd}
@@ -164,6 +165,8 @@ if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; the
 fi
 pvcmd+=(-- "$(escape "$source")")
 
+pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
+
 #------------------------------------------------------------------------------
 
 require mksquashfs squashfs-tools
@@ -181,4 +184,4 @@ tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
 trap 'rm -rf -- "$tmpdir"' EXIT
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
-mksquashfs "$tmpdir" "$target" -p "disk.img f $mode $user $group ${pvcmd[*]}" -info -comp "$comp"
+trace mksquashfs "$tmpdir" "$target" -info -comp "$comp" -p "$pseudo"
