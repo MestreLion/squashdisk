@@ -20,7 +20,7 @@ trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
 
 #------------------------------------------------------------------------------
 
-source=-  # standard input
+source=
 target=
 
 block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
@@ -75,7 +75,7 @@ require() {
 usage() {
 	if [[ "${1:-}" ]] ; then exec >&2; fi
 	cat <<-USAGE
-	Usage: $self [options] [-o OUTPUT_FILE|-O OUTPUT_DIR] [SOURCE]
+	Usage: $self [options] [-o OUTPUT_FILE|-O OUTPUT_DIR] SOURCE
 	USAGE
 	if [[ "${1:-}" ]] ; then
 		cat <<- USAGE
@@ -138,7 +138,7 @@ args+=( "$@" )
 
 #------------------------------------------------------------------------------
 case ${#args[@]} in
-	0) ;;  # use the default "-" for source
+	0) missing SOURCE;;
 	1) source=${args[0]}; if [[ -z "$source" ]]; then missing SOURCE; fi;;
 	*) invalid "${args[1]}" argument;;
 esac
