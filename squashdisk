@@ -10,8 +10,18 @@
 # - mksquashfs (squashfs-tools)
 # - pv
 # - numfmt (coreutils)
+# - udisksctl (udisks2)
 #
-# To expose partitions: losetup
+# References (from oldest to best):
+# https://ubuntuforums.org/showthread.php?t=1291804
+# https://ubuntuforums.org/showthread.php?t=2240493
+# https://askubuntu.com/a/847423/11015
+# https://unix.stackexchange.com/a/75590/4919
+#
+# Wash partitions:
+# sudo dd if=/dev/zero of=/dev/sdd4 bs=1M status=progress
+#
+# Expose/mount partitions: losetup
 # https://unix.stackexchange.com/questions/31669
 #------------------------------------------------------------------------------
 
@@ -69,6 +79,39 @@ require() {
 	fi
 	echo -e "Please install ${cmd} ${msg}and try again.${eol}" >&2
 	exit 1
+}
+
+device_name() {
+	local source=$1
+	# udisksctl info -b "$source" | grep '^ *Drive:' | cut -d\' -f2
+	udevadm info --query=property "$source" | grep '^ID_SERIAL=' | cut -d= -f2
+	local line
+	declare -A dev
+	while IFS= read -r line; do dev[${line%%=*}]=${line#*=}; done < <(
+		udevadm info --query=property "$source"
+	)
+
+
+#lsblk -pbd /dev/{sd?,nvme0n1} -o TYPE,SIZE,VENDOR,MODEL,SERIAL,LABEL,PARTLABEL,FSTYPE,RM,ROTA
+#TYPE          SIZE VENDOR   MODEL                                    SERIAL          LABEL              PARTLABEL FSTYPE  RM ROTA
+#disk 4000787030016 ATA      ST4000DM004-2CV1                         ZFN46CS1                                              0    1
+#disk 4000787030016 ATA      ST4000DM004-2CV1                         ZTT363LZ                                              0    1
+#disk 8001563222016 ATA      ST8000DM004-2CX1                         ZR121M38                                              0    1
+#disk  512110190592 ATA      SSD 512GB                                202101280011                                          0    0
+#disk    8054112256 Generic  Flash Disk                               DFB1FB32        Ubuntu Unity 22.04           iso9660  1    1
+#disk 2000398934016          Samsung SSD 970 EVO Plus 2TB             S59CNM0R904308X                                       0    0
+
+# udevadm does not give SIZE for disks (and only sectors for partitions
+# lsblk lies about VENDOR, may say "ATA"/"ATAPI" for Hard/CD Drives without ID_VENDOR
+
+# Disk name:
+# {LABEL - }SIZE {VENDOR }{MODEL}{-SERIAL}
+
+# Partition name:
+# LABEL{ - }PARTLABEL
+
+# Size:
+# numfmt --to=si --round=down --suffix=B --format '%.0f' 8054112256
 }
 
 #------------------------------------------------------------------------------
@@ -142,6 +185,7 @@ require mksquashfs squashfs-tools
 require pv
 require numfmt coreutils
 require udisksctl udisks2
+require lsblk util-linux
 
 case ${#args[@]} in
 	0) missing SOURCE;;
@@ -155,14 +199,15 @@ if [[ "${outfile:-}" ]]; then
 	fi
 	target=$outfile
 else
+	outdir=${outdir:-.}
 	if [[ "$source" == '-' ]]; then
 		name=stdin
 	elif [[ -b "$source" ]]; then
-		name=$(udisksctl info -b "$source" | grep '^ *Drive:' | cut -d\' -f2)
+		name=$(device_name "$source")
 	else
 		name=$source
 	fi
-	target=${outdir:-.}/${name##*/}.sqsh
+	target=${outdir%/}/${name##*/}.sqsh
 fi
 
 block=$(sizefmt "$block" '--block-size') || exit
