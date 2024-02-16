@@ -41,6 +41,7 @@ comp=zstd  # Available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
 user=root
 group=root
 mode=444
+fsroot_mode=775
 wash=0
 
 size=0
@@ -233,6 +234,16 @@ pvcmd+=(-- "$(escape "$source")")
 
 pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
 
+permopts=(
+	-root-mode "$fsroot_mode"
+	# All below can be replaced with '-all-root' if user and group is 'root'
+	-root-uid $(id -u "$user")
+	# Alternative: getent group "$group" | cut -d: -f3
+	-root-gid $(grep "^${group}:" /etc/group | cut -d: -f3)
+	-force-uid "$user"
+	-force-gid "$group"
+)
+
 #------------------------------------------------------------------------------
 if ! ((force)); then
 	if [[ -b "$source" ]] && grep -q "^$source" /proc/mounts; then
@@ -246,4 +257,4 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
-trace mksquashfs "$tmpdir" "$target" -info -comp "$comp" -p "$pseudo"
+trace mksquashfs "$tmpdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
