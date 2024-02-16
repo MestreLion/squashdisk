@@ -21,6 +21,9 @@
 # Wash partitions:
 # sudo dd if=/dev/zero of=/dev/sdd4 bs=1M status=progress
 #
+# List suitable (block) devices for bash-completion:
+# lsblk -pnro name
+#
 # Expose/mount partitions: losetup
 # https://unix.stackexchange.com/questions/31669
 #------------------------------------------------------------------------------
@@ -141,6 +144,12 @@ usage() {
 	  -B|--block-size SIZE - read SIZE blocks at a time. [Default: $block]
 	  -c|--compressor COMP - select COMP compressor [Default: $comp]
 
+	  -o|--output     FILE Create output file as FILE
+	  -O|--output-dir DIR  Create output file in DIR
+
+	By default create file in the current directory, with '.sqsh' extension
+	and name based on disk/partition capacity, model and serial number.
+
 	All SIZE units are parsed through 'numfmt' auto mode, so SI suffixes such
 	as K, M, G are allowed. '1K' means 1000; use 'Ki' (and 'Mi', 'Gi', etc)
 	for 1024-based units.
@@ -236,4 +245,5 @@ tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
 trap 'rm -rf -- "$tmpdir"' EXIT
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
+# Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
 trace mksquashfs "$tmpdir" "$target" -info -comp "$comp" -p "$pseudo"
