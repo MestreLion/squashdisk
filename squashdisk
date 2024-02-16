@@ -255,6 +255,11 @@ fi
 tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
 trap 'rm -rf -- "$tmpdir"' EXIT
 
+# TODO: add conditionals (sudo, block device, etc)
+sudo fdisk  --list "$source" > "$tmpdir"/fdisk.txt
+sudo sfdisk --dump "$source" > "$tmpdir"/sfdisk.txt
+sudo chmod "$mode" -- "$tmpdir"/{,s}fdisk.txt
+
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
 trace mksquashfs "$tmpdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
