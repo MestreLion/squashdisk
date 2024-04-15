@@ -256,6 +256,7 @@ if ! ((force)); then
 fi
 
 tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
+chmod "$fsroot_mode" -- "$tmpdir"  # FIXME: only needed if mksquashfs < 4.4
 trap 'rm -rf -- "$tmpdir"' EXIT
 
 # TODO: add conditionals (sudo, block device, etc)
