@@ -236,7 +236,7 @@ pvcmd+=(-- "$(escape "$source")")
 pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
 
 permopts=(
-	# TODO: Test '-root-mode' availability (mksquashfs 4.4)
+	# TODO: Test for '-root-{mode,uid,gid}' availability (mksquashfs 4.4)
 	-root-mode "$fsroot_mode"
 	# TODO: All below can be replaced with '-all-root' if user and group is 'root'
 	#       Test it and do so as root is the default user and group
