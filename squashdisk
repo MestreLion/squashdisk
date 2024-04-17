@@ -237,14 +237,15 @@ pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
 
 permopts=(
 	# TODO: Test for '-root-{mode,uid,gid}' availability (mksquashfs 4.4)
-	-root-mode "$fsroot_mode"
+	# -root-mode "$fsroot_mode"
 	# TODO: All below can be replaced with '-all-root' if user and group is 'root'
 	#       Test it and do so as root is the default user and group
 	# FIXME: Ensure name and id are interchangeable, as it is for mksquashfs
-	-root-uid $(id -u "$user")
-	-root-gid $(grep "^${group}:" /etc/group | cut -d: -f3)
-	-force-uid "$user"
-	-force-gid "$group"
+	-all-root
+	# -root-uid $(id -u "$user")
+	# -root-gid $(grep "^${group}:" /etc/group | cut -d: -f3)
+	# -force-uid "$user"
+	# -force-gid "$group"
 )
 
 #------------------------------------------------------------------------------
