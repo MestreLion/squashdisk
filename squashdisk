@@ -38,7 +38,7 @@ target=
 include=
 
 block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
-comp=zstd  # 'zstd' available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
+comp=gzip  # 'zstd' available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
 user=root
 group=root
 mode=444
