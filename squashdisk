@@ -117,6 +117,13 @@ device_name() {
 # numfmt --to=si --round=down --suffix=B --format '%.0f' 8054112256
 }
 
+
+device_partitions() {
+	local device=$1
+	sudo lsblk "$device" --list --noheadings --paths --output NAME,TYPE,FSTYPE |
+		awk '$2 ~ "part" && $3'
+}
+
 #------------------------------------------------------------------------------
 
 usage() {
