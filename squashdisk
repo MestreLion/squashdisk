@@ -158,6 +158,7 @@ usage() {
 	                   0 means the whole input [Default: $size]
 	  -B|--block-size SIZE - read SIZE blocks at a time. [Default: $block]
 	  -c|--compressor COMP - select COMP compressor [Default: $comp]
+	  -i|--include DIR     - include contents of directory DIR in filesystem root
 
 	  -o|--output     FILE Create output file as FILE
 	  -O|--output-dir DIR  Create output file in DIR
@@ -272,6 +273,14 @@ permopts=(
 	-force-gid "$gid"
 )
 
+declare -a sources
+if [[ "$include" ]]; then
+	if ! [[ -d "$include" ]]; then
+		argerr "--include argument is not a directory: $include"
+	fi
+	sources+=( "$include" )
+fi
+
 #------------------------------------------------------------------------------
 if ! ((force)); then
 	if [[ -b "$source" ]] && grep -q "^$source" /proc/mounts; then
@@ -282,6 +291,7 @@ fi
 
 tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
 trap 'rm -rf -- "$tmpdir"' EXIT
+sources+=( "$tmpdir" );
 
 if ((info)); then
 	infodir=$tmpdir/disk-info
@@ -297,4 +307,4 @@ fi
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
-trace mksquashfs "$tmpdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
+trace mksquashfs "${sources[@]}" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
