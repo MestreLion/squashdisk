@@ -39,8 +39,8 @@ include=
 
 block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
 comp=zstd  # 'zstd' available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
-user=root
-group=root
+user=0
+group=0
 mode=444
 fsroot_mode=775  # Should be ignored if older than mksquashfs 4.4 (2019-08-29)
 wash=0
@@ -67,6 +67,7 @@ sizefmt() { [[ "$1" ]] || missing "${3:-SIZE}" "${2:-}";
             numfmt --from=auto -- "$1" || fatal; }
 escape()  { printf '%q' "$1"; }  # $@ will not work as expected
 exists()  { type "$@" >/dev/null 2>&1; }
+integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
 trace()   { local s; set -x +e; "$@"; { s=$?; set +x -e; } 2>&-; return $s; }
 require() {
 	local cmd=$1
@@ -231,6 +232,11 @@ fi
 block=$(sizefmt "$block" '--block-size') || exit
 size=$( sizefmt "$size"  '--size'      ) || exit
 
+uid=$user
+gid=$group
+if ! integer "$uid"; then uid=$(id -u "$uid"); fi
+if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
+
 pvcmd=(pv --buffer-size "$block")
 if ((size)); then
 	pvcmd+=(--size "$size" --stop-at-size)
@@ -240,18 +246,15 @@ if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; the
 fi
 pvcmd+=(-- "$(escape "$source")")
 
-pseudo="disk.img f $mode $user $group ${pvcmd[*]}"
+pseudo="disk.img f $mode $uid $gid ${pvcmd[*]}"
 
 permopts=(
 	# TODO: Test for '-root-{mode,uid,gid}' availability (mksquashfs 4.4)
 	-root-mode "$fsroot_mode"
-	# TODO: All below can be replaced with '-all-root' if user and group is 'root'
-	#       Test it and do so as root is the default user and group
-	# FIXME: Ensure name and id are interchangeable, as it is for mksquashfs
-	-root-uid $(id -u "$user")
-	-root-gid $(grep "^${group}:" /etc/group | cut -d: -f3)
-	-force-uid "$user"
-	-force-gid "$group"
+	-root-uid "$uid"
+	-root-gid "$gid"
+	-force-uid "$uid"
+	-force-gid "$gid"
 )
 
 #------------------------------------------------------------------------------
