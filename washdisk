@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#set -Eeuo pipefail  # exit on any error
+#trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
+
+verbose=1
+
+bold()    { tput bold; echo "$@"; tput sgr0; }
+red()     { tput setaf 1; bold "$@"; }
+green()   { tput setaf 2; bold "$@"; }
+title()   { if (($# && verbose)); then green '* ' "$@"; fi; }
+message() { if (($# && verbose)); then bold "$@"; fi; }
+error()   { if (($#)); then red "$@" >&2; fi; }
+fatal()   { error "$@"; exit 1; }
+
+
+wash_partitions() {
+	local device=${1:-}
+	local mountpoint space spare=10 unmount=0
+	while IFS= read -r partition; do
+		title "Filling ${partition} empty space"
+		if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
+		mountpoint=$(
+			udisksctl info --block-device "$partition" |
+			grep '^ *MountPoints:' |
+			sed 's/^ *MountPoints: *//'
+		)
+		if [[ "$mountpoint" ]]; then
+			space=$(( $(df -B1M --output=avail "$mountpoint" | tail -n1) - spare ))
+			if [[ -z "$space" ]] || (( space < 1 )); then
+				message "empty space less than ${space} MiB, ignoring"
+				continue
+			fi
+			zero=$(mktemp -- "$mountpoint"/zero.XXXXXXXXXX.tmp) || {
+				error "${partition}: could not create temp file on ${mountpoint}"
+				continue
+			}
+			trap 'rm -f -- "$zero"' EXIT
+			message "${partition}: Filling empty space with zeroes: ${space} MiB"
+			pv -Ss "${space}M" /dev/zero > "$zero"
+			sync --file-system "$mountpoint"
+			rm -- "$zero"
+			sync --file-system "$mountpoint"
+		else
+			error "${partition}: could not mount"
+		fi
+		if ((unmount)); then
+			udisksctl unmount --block-device "$partition" || continue
+		fi
+	done < <(
+		lsblk "$device" -lnpb --output NAME,RO,FSTYPE |
+			awk '$2 == 0 && $3 {print $1}'
+	)
+}
+
+if [[ -z "${1:-}" ]]; then fatal "Usage: washdisk DEVICE"; fi
+wash_partitions "$@"
