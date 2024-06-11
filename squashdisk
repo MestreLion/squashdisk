@@ -279,13 +279,13 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 if ((info)); then
 	infodir=$tmpdir/disk-info
 	mkdir -- "$infodir"
-	sudo fdisk  --list     "$source" > "$infodir"/fdisk.txt    2>&1 || :
-	sudo sfdisk --dump     "$source" > "$infodir"/sfdisk.txt   2>&1 || :
-	sudo smartctl --xall   "$source" > "$infodir"/smartctl.txt 2>&1 || :
-	sudo lsblk -OJpb       "$source" > "$infodir"/lsblk.txt    2>&1 || :
-	sudo udisksctl info -b "$source" > "$infodir"/udiskctl.txt 2>&1 || :
-	sudo chmod -R "$mode" -- "$infodir"
-	sudo chmod +x  -- "$infodir"
+	sudo fdisk  --list "$source" > "$infodir"/fdisk.txt    2>&1 || :
+	sudo sfdisk --dump "$source" > "$infodir"/sfdisk.txt   2>&1 || :
+	sudo smartctl -x   "$source" > "$infodir"/smartctl.txt 2>&1 || :
+	sudo lsblk -OJpb   "$source" > "$infodir"/lsblk.txt    2>&1 || :
+	udisksctl info -b  "$source" > "$infodir"/udiskctl.txt 2>&1 || :
+	chmod -R "$mode" -- "$infodir"
+	chmod +x  -- "$infodir"
 fi
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
