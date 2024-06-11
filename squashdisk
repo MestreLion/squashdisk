@@ -38,11 +38,11 @@ target=
 include=
 
 block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
-comp=zstd  # 'zstd' available since mksquashfs 4.4 (2019-08-29). Default 'gzip'.
+comp=zstd
 user=0
 group=0
 mode=444
-fsroot_mode=775  # Should be ignored if older than mksquashfs 4.4 (2019-08-29)
+fsroot_mode=775
 wash=0
 
 size=0
@@ -86,6 +86,12 @@ require() {
 	fi
 	echo -e "Please install ${cmd} ${msg}and try again.${eol}" >&2
 	exit 1
+}
+check_version() {
+	local vref=$1
+	local vcur=$(mksquashfs -version | head -n1 | cut -d' ' -f3)
+	local vmax=$(printf "%s\n" "$vcur" "$vref" | LC_ALL=C sort --version-sort | tail -n1)
+	if [[ "$vmax" != "$vcur" ]]; then return 1; fi
 }
 
 device_name() {
@@ -207,6 +213,9 @@ require numfmt coreutils
 require udisksctl udisks2
 require lsblk util-linux
 
+# mksquashfs 4.4 (2019-08-29) added -root-{mode,uid,gid} and -comp zstd
+if ! check_version 4.4; then fatal "mksquashfs version 4.4 or greater is required"; fi
+
 if ((info)); then
 	require smartctl smartmontools
 	require fdisk fdisk
@@ -256,7 +265,6 @@ pvcmd+=(-- "$(escape "$source")")
 pseudo="disk.img f $mode $uid $gid ${pvcmd[*]}"
 
 permopts=(
-	# TODO: Test for '-root-{mode,uid,gid}' availability (mksquashfs 4.4)
 	-root-mode "$fsroot_mode"
 	-root-uid "$uid"
 	-root-gid "$gid"
@@ -273,7 +281,6 @@ if ! ((force)); then
 fi
 
 tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
-chmod "$fsroot_mode" -- "$tmpdir"  # FIXME: only needed if mksquashfs < 4.4
 trap 'rm -rf -- "$tmpdir"' EXIT
 
 if ((info)); then
