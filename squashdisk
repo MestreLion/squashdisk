@@ -48,6 +48,7 @@ wash=0
 size=0
 autosudo=1
 force=0
+info=1
 
 verbose=0
 
@@ -206,6 +207,12 @@ require numfmt coreutils
 require udisksctl udisks2
 require lsblk util-linux
 
+if ((info)); then
+	require smartctl smartmontools
+	require fdisk fdisk
+	require sfdisk fdisk
+fi
+
 case ${#args[@]} in
 	0) missing SOURCE;;
 	1) source=${args[0]}; if [[ -z "$source" ]]; then missing SOURCE; fi;;
@@ -269,10 +276,17 @@ tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
 chmod "$fsroot_mode" -- "$tmpdir"  # FIXME: only needed if mksquashfs < 4.4
 trap 'rm -rf -- "$tmpdir"' EXIT
 
-# TODO: add conditionals (sudo, block device, etc)
-sudo fdisk  --list "$source" > "$tmpdir"/fdisk.txt
-sudo sfdisk --dump "$source" > "$tmpdir"/sfdisk.txt
-sudo chmod "$mode" -- "$tmpdir"/{,s}fdisk.txt
+if ((info)); then
+	infodir=$tmpdir/disk-info
+	mkdir -- "$infodir"
+	sudo fdisk  --list     "$source" > "$infodir"/fdisk.txt    2>&1 || :
+	sudo sfdisk --dump     "$source" > "$infodir"/sfdisk.txt   2>&1 || :
+	sudo smartctl --xall   "$source" > "$infodir"/smartctl.txt 2>&1 || :
+	sudo lsblk -OJpb       "$source" > "$infodir"/lsblk.txt    2>&1 || :
+	sudo udisksctl info -b "$source" > "$infodir"/udiskctl.txt 2>&1 || :
+	sudo chmod -R "$mode" -- "$infodir"
+	sudo chmod +x  -- "$infodir"
+fi
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
