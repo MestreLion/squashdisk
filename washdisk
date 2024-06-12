@@ -8,12 +8,13 @@
 #------------------------------------------------------------------------------
 
 set -Eeuo pipefail  # exit on any error
-trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
+trap 'error "line $LINENO, status $?: $BASH_COMMAND"' ERR
 
 #------------------------------------------------------------------------------
 
 device=${1:-}
 verbose=1
+spare=10  # Free space to leave in partition, in Mibibytes
 
 # Loop vars
 partition=
@@ -41,9 +42,8 @@ cleanup() {
 }
 
 wash_partition() {
-	local mountpoint space spare=10
-
 	title "Writing zeroes to empty space of ${partition}"
+	local mountpoint space fmtspace
 	if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
 	mountpoint=$(
 		udisksctl info --block-device "$partition" |
@@ -52,7 +52,7 @@ wash_partition() {
 	)
 	if [[ -z "$mountpoint" ]]; then
 		error "${partition}: could not mount"
-		return 1
+		code+=1; return
 	fi
 	space=$(( $(df -B1M --output=avail "$mountpoint" | tail -n1) - spare ))
 	if [[ -z "$space" ]] || (( space < 1 )); then
@@ -61,11 +61,11 @@ wash_partition() {
 	fi
 	zero=$(mktemp -- "$mountpoint"/zero.XXXXXXXXXX.tmp) || {
 		error "${partition}: could not create temp file on ${mountpoint}"
-		return 2
+		code+=1; return
 	}
-	message "${partition}: Filling empty space with zeroes: ${space} MiB"
-	pv -Ss "${space}M" /dev/zero > "$zero"
-	sync --file-system "$mountpoint"
+	fmtspace=$(numfmt --from-unit Mi --to iec-i "$space")B
+	pv -N "Writing ${fmtspace}" -Ss "${space}M" /dev/zero > "$zero" || code+=1
+	sync --file-system "$mountpoint" | pv -t -N "Syncing filesystem"
 	rm -- "$zero"
 	sync --file-system "$mountpoint"
 }
@@ -74,13 +74,15 @@ wash_partition() {
 #------------------------------------------------------------------------------
 
 if [[ -z "$device" ]]; then fatal "Usage: washdisk DEVICE"; fi
-trap 'cleanup' EXIT
 
-while IFS= read -r partition; do
-	wash_partition || code=$?
+trap 'cleanup' EXIT
+while IFS= read -r partition || ! code+=$partition; do
+	wash_partition
 	cleanup
 done < <(
 	lsblk "$device" -lnpb --output NAME,RO,FSTYPE |
-		awk '$2 == 0 && $3 {print $1}'
+		awk '$2 == 0 && $3 {print $1}' &&
+	printf 0 || printf $?
 )
+trap - EXIT
 exit "$code"
