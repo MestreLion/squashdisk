@@ -21,6 +21,7 @@ partition=
 unmount=0
 zero=
 code=0
+sudo=env
 
 #------------------------------------------------------------------------------
 
@@ -34,7 +35,7 @@ fatal()   { error "$@"; exit 1; }
 
 
 cleanup() {
-	rm -f -- "$zero"
+	"$sudo" rm -f -- "$zero"; sudo=env
 	if ((unmount)); then
 		unmount=0
 		udisksctl unmount --block-device "$partition" || true
@@ -42,8 +43,8 @@ cleanup() {
 }
 
 wash_partition() {
-	title "Writing zeroes to empty space of ${partition}"
-	local mountpoint space fmtspace
+	title "Write zeroes in the empty space of ${partition}"
+	local mountpoint space fmtspace tmpdir
 	if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
 	mountpoint=$(
 		udisksctl info --block-device "$partition" |
@@ -59,14 +60,21 @@ wash_partition() {
 		message "empty space less than ${space} MiB, ignoring"
 		return
 	fi
-	zero=$(mktemp -- "$mountpoint"/zero.XXXXXXXXXX.tmp) || {
+	if [[ -w "$mountpoint"/tmp ]]; then
+		tmpdir=$mountpoint/tmp
+	else
+		if ! [[ -w "$mountpoint" ]]; then sudo=sudo; fi
+		tmpdir=$mountpoint
+	fi
+	zero=$(mktemp --tmpdir="$tmpdir" -- washdisk.zero.XXXXXXXXXX.tmp) || {
 		error "${partition}: could not create temp file on ${mountpoint}"
 		code+=1; return
 	}
 	fmtspace=$(numfmt --from-unit Mi --to iec-i "$space")B
-	pv -N "Writing ${fmtspace}" -Ss "${space}M" /dev/zero > "$zero" || code+=1
+	pv -N "Writing ${fmtspace}" -Ss "${space}M" /dev/zero |
+		"$sudo" tee "$zero" >/dev/null || code+=1
 	sync --file-system "$mountpoint" | pv -t -N "Syncing filesystem"
-	rm -- "$zero"
+	"$sudo" rm -- "$zero"
 	sync --file-system "$mountpoint"
 }
 
