@@ -1,9 +1,26 @@
 #!/bin/bash
+#
+# washdisk - "Wash" disk partitions by writing zeroes to filesystem empty space
+#
+# This file is part of squashdisk, see <https://github.com/MestreLion/squashdisk>
+# Copyright (C) 2024 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+# License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
+#------------------------------------------------------------------------------
 
-#set -Eeuo pipefail  # exit on any error
-#trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
+set -Eeuo pipefail  # exit on any error
+trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
 
+#------------------------------------------------------------------------------
+
+device=${1:-}
 verbose=1
+
+# Loop vars
+partition=
+unmount=0
+zero=
+
+#------------------------------------------------------------------------------
 
 bold()    { tput bold; echo "$@"; tput sgr0; }
 red()     { tput setaf 1; bold "$@"; }
@@ -14,11 +31,18 @@ error()   { if (($#)); then red "$@" >&2; fi; }
 fatal()   { error "$@"; exit 1; }
 
 
+cleanup() {
+	rm -f -- "$zero"
+	if ((unmount)); then
+		unmount=0
+		udisksctl unmount --block-device "$partition" || return 1
+	fi
+}
+
 wash_partitions() {
-	local device=${1:-}
-	local mountpoint space spare=10 unmount=0
+	local mountpoint space spare=10
 	while IFS= read -r partition; do
-		title "Filling ${partition} empty space"
+		title "Writing zeroes to empty space of ${partition}"
 		if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
 		mountpoint=$(
 			udisksctl info --block-device "$partition" |
@@ -35,7 +59,6 @@ wash_partitions() {
 				error "${partition}: could not create temp file on ${mountpoint}"
 				continue
 			}
-			trap 'rm -f -- "$zero"' EXIT
 			message "${partition}: Filling empty space with zeroes: ${space} MiB"
 			pv -Ss "${space}M" /dev/zero > "$zero"
 			sync --file-system "$mountpoint"
@@ -44,14 +67,17 @@ wash_partitions() {
 		else
 			error "${partition}: could not mount"
 		fi
-		if ((unmount)); then
-			udisksctl unmount --block-device "$partition" || continue
-		fi
+		cleanup || continue
 	done < <(
 		lsblk "$device" -lnpb --output NAME,RO,FSTYPE |
 			awk '$2 == 0 && $3 {print $1}'
 	)
 }
 
-if [[ -z "${1:-}" ]]; then fatal "Usage: washdisk DEVICE"; fi
+
+#------------------------------------------------------------------------------
+
+if [[ -z "$device" ]]; then fatal "Usage: washdisk DEVICE"; fi
+trap 'cleanup' EXIT
+
 wash_partitions "$@"
