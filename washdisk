@@ -19,6 +19,7 @@ verbose=1
 partition=
 unmount=0
 zero=
+code=0
 
 #------------------------------------------------------------------------------
 
@@ -35,43 +36,38 @@ cleanup() {
 	rm -f -- "$zero"
 	if ((unmount)); then
 		unmount=0
-		udisksctl unmount --block-device "$partition" || return 1
+		udisksctl unmount --block-device "$partition" || true
 	fi
 }
 
-wash_partitions() {
+wash_partition() {
 	local mountpoint space spare=10
-	while IFS= read -r partition; do
-		title "Writing zeroes to empty space of ${partition}"
-		if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
-		mountpoint=$(
-			udisksctl info --block-device "$partition" |
-			grep '^ *MountPoints:' |
-			sed 's/^ *MountPoints: *//'
-		)
-		if [[ "$mountpoint" ]]; then
-			space=$(( $(df -B1M --output=avail "$mountpoint" | tail -n1) - spare ))
-			if [[ -z "$space" ]] || (( space < 1 )); then
-				message "empty space less than ${space} MiB, ignoring"
-				continue
-			fi
-			zero=$(mktemp -- "$mountpoint"/zero.XXXXXXXXXX.tmp) || {
-				error "${partition}: could not create temp file on ${mountpoint}"
-				continue
-			}
-			message "${partition}: Filling empty space with zeroes: ${space} MiB"
-			pv -Ss "${space}M" /dev/zero > "$zero"
-			sync --file-system "$mountpoint"
-			rm -- "$zero"
-			sync --file-system "$mountpoint"
-		else
-			error "${partition}: could not mount"
-		fi
-		cleanup || continue
-	done < <(
-		lsblk "$device" -lnpb --output NAME,RO,FSTYPE |
-			awk '$2 == 0 && $3 {print $1}'
+
+	title "Writing zeroes to empty space of ${partition}"
+	if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
+	mountpoint=$(
+		udisksctl info --block-device "$partition" |
+		grep '^ *MountPoints:' |
+		sed 's/^ *MountPoints: *//'
 	)
+	if [[ -z "$mountpoint" ]]; then
+		error "${partition}: could not mount"
+		return 1
+	fi
+	space=$(( $(df -B1M --output=avail "$mountpoint" | tail -n1) - spare ))
+	if [[ -z "$space" ]] || (( space < 1 )); then
+		message "empty space less than ${space} MiB, ignoring"
+		return
+	fi
+	zero=$(mktemp -- "$mountpoint"/zero.XXXXXXXXXX.tmp) || {
+		error "${partition}: could not create temp file on ${mountpoint}"
+		return 2
+	}
+	message "${partition}: Filling empty space with zeroes: ${space} MiB"
+	pv -Ss "${space}M" /dev/zero > "$zero"
+	sync --file-system "$mountpoint"
+	rm -- "$zero"
+	sync --file-system "$mountpoint"
 }
 
 
@@ -80,4 +76,11 @@ wash_partitions() {
 if [[ -z "$device" ]]; then fatal "Usage: washdisk DEVICE"; fi
 trap 'cleanup' EXIT
 
-wash_partitions "$@"
+while IFS= read -r partition; do
+	wash_partition || code=$?
+	cleanup
+done < <(
+	lsblk "$device" -lnpb --output NAME,RO,FSTYPE |
+		awk '$2 == 0 && $3 {print $1}'
+)
+exit "$code"
