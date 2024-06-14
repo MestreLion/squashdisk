@@ -297,8 +297,8 @@ if [[ -z "$srcdir" ]]; then
 fi
 
 if ((info)); then
-	infodir=$srcdir/disk-info
-	mkdir -- "$infodir"
+	infodir=${srcdir%/}/disk-info
+	mkdir -p -- "$infodir"
 	sudo fdisk  --list "$source" > "$infodir"/fdisk.txt    2>&1 || :
 	sudo sfdisk --dump "$source" > "$infodir"/sfdisk.txt   2>&1 || :
 	sudo smartctl -x   "$source" > "$infodir"/smartctl.txt 2>&1 || :
