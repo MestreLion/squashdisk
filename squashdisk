@@ -254,7 +254,7 @@ gid=$group
 if ! integer "$uid"; then uid=$(id -u "$uid"); fi
 if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
 
-pvcmd=(pv --buffer-size "$block" --force)
+pvcmd=(pv --buffer-size "$block")
 if ((size)); then
 	pvcmd+=(--size "$size" --stop-at-size)
 fi
