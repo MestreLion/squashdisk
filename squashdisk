@@ -35,13 +35,13 @@ trap '>&2 echo "error: line $LINENO, status $?: $BASH_COMMAND"' ERR
 
 source=
 target=
-include=
+srcdir=  # if info, must be writable
 
 block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
 comp=zstd
 user=0
 group=0
-mode=444
+mode=444  # octal mode for the disk image created inside the squashfs file
 fsroot_mode=775
 wash=0
 
@@ -192,13 +192,13 @@ while (($#)); do
 	-o|--output    ) shift; outfile=${1:-};;
 	-O|--output-dir) shift; outdir=${1:-};;
 	-c|--compressor) shift; comp=${1:-};;
-	-i|--include   ) shift; include=${1:-};;
+	-i|--include   ) shift; srcdir=${1:-};;
 	--block-size=*) block=${1#*=};;
 	--size=*      ) size=${1#*=};;
 	--output=*    ) outfile=${1#*=};;
 	--output-dir=*) outdir=${1#*=};;
 	--compressor=*) comp=${1#*=};;
-	--include=*   ) include=${1#*=};;
+	--include=*   ) srcdir=${1#*=};;
 	--) shift; break;;
 	-*) invalid "$1";;
 	* ) args+=( "$1" );;
@@ -273,12 +273,9 @@ permopts=(
 	-force-gid "$gid"
 )
 
-declare -a sources
-if [[ "$include" ]]; then
-	if ! [[ -d "$include" ]]; then
-		argerr "--include argument is not a directory: $include"
-	fi
-	sources+=( "$include" )
+
+if [[ "$srcdir" ]] && ! [[ -d "$srcdir" ]]; then
+	argerr "--include argument is not a directory: $srcdir"
 fi
 
 #------------------------------------------------------------------------------
@@ -289,22 +286,22 @@ if ! ((force)); then
 	fi
 fi
 
-tmpdir=$(mktemp --directory) || fatal "could not create temp dir"
-trap 'rm -rf -- "$tmpdir"' EXIT
-sources+=( "$tmpdir" );
+
+if [[ -z "$srcdir" ]]; then
+	srcdir=$(mktemp --directory) || fatal "could not create temp dir"
+	trap 'rm -rf -- "$srcdir"' EXIT
+fi
 
 if ((info)); then
-	infodir=$tmpdir/disk-info
+	infodir=$srcdir/disk-info
 	mkdir -- "$infodir"
 	sudo fdisk  --list "$source" > "$infodir"/fdisk.txt    2>&1 || :
 	sudo sfdisk --dump "$source" > "$infodir"/sfdisk.txt   2>&1 || :
 	sudo smartctl -x   "$source" > "$infodir"/smartctl.txt 2>&1 || :
 	sudo lsblk -OJpb   "$source" > "$infodir"/lsblk.txt    2>&1 || :
 	udisksctl info -b  "$source" > "$infodir"/udiskctl.txt 2>&1 || :
-	chmod -R "$mode" -- "$infodir"
-	chmod +x  -- "$infodir"
 fi
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
-trace mksquashfs "${sources[@]}" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
+trace mksquashfs "$srcdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
