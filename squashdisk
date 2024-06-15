@@ -18,14 +18,13 @@
 # https://askubuntu.com/a/847423/11015
 # https://unix.stackexchange.com/a/75590/4919
 #
-# Wash partitions:
-# sudo dd if=/dev/zero of=/dev/sdd4 bs=1M status=progress
-#
 # List suitable (block) devices for bash-completion:
 # lsblk -pnro name
 #
 # Expose/mount partitions: losetup
 # https://unix.stackexchange.com/questions/31669
+# OR: udisksctl loop-setup -r -f FILE.sqsh
+
 #------------------------------------------------------------------------------
 
 set -Eeuo pipefail  # exit on any error
