@@ -45,11 +45,12 @@ cleanup() {
 wash_partition() {
 	title "Write zeroes in the empty space of ${partition}"
 	local mountpoint space fmtspace tmpdir
-	if udisksctl mount --block-device "$partition" 2>/dev/null; then unmount=1; fi
+	if udisksctl mount --block-device "$partition" 2>/dev/null; then
+		unmount=1
+	fi
 	mountpoint=$(
-		udisksctl info --block-device "$partition" |
-		grep '^ *MountPoints:' |
-		sed 's/^ *MountPoints: *//'
+		LC_ALL=C udisksctl info --block-device "$partition" |
+		grep -Po '^ *MountPoints: *\K.*'
 	)
 	if [[ -z "$mountpoint" ]]; then
 		error "${partition}: could not mount"
