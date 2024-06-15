@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -eu
 #
 # mount-squashdisk - helper to loopback-mount the disk image in a squashdisk file
 #
@@ -6,11 +6,18 @@
 # Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
 # License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
 
-squashfile=$1
-diskimage=disk.img
+squashfile=${1:-}
 
-loopsetup() { udisksctl loop-setup -r -f "$1" | grep -Po '/dev/loop\d+'; }
-loopmount() { udisksctl mount -b "$1" | sed 's/^.* at \(.*\)\.$/\1/'; }
+diskimage=disk.img
+self=${0##*/}
+
+#------------------------------------------------------------------------------
+
+fatal()     { if (($#)); then echo "$@" >&2; usage 1 >&2; fi; }
+usage()     { echo "Usage: ${self} SQUASHDISK_FILE [PARTITION_NUM]"; exit ${1:-0}; }
+
+loopsetup() { LC_ALL=C udisksctl loop-setup -r -f "$1" | grep -Po '/dev/loop\d+'; }
+loopmount() { LC_ALL=C udisksctl mount -b "$1" | sed 's/^.* at \(.*\)\.$/\1/'; }
 
 unmount() {
 	trap - INT TERM EXIT
@@ -19,12 +26,16 @@ unmount() {
 	udisksctl loop-delete -b "$outerloop"
 }
 
-export LC_ALL=C
+#------------------------------------------------------------------------------
 
-if ! [[ -f "$squashfile" ]]; then
-	echo "Usage: squashdisk-mount <SQUASHDISK_FILE>" >&2
-	exit 1
-fi
+if ! (($#)); then usage 1; fi
+for arg in "$@"; do
+	if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then usage; fi
+done
+
+if ! [[ -f "$squashfile" ]]; then fatal "File not found: $squashfile"; fi
+
+#------------------------------------------------------------------------------
 
 outerloop=$(loopsetup "$squashfile")
 mountpoint=$(loopmount "$outerloop")
