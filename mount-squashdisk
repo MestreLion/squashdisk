@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# mount-squashdisk - helper to loopback-mount the disk image in a squashdisk file
+#
+# This file is part of squashdisk, see <https://github.com/MestreLion/squashdisk>
+# Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+# License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
+
+squashfile=$1
+diskimage=disk.img
+
+loopsetup() { udisksctl loop-setup -r -f "$1" | grep -Po '/dev/loop\d+'; }
+loopmount() { udisksctl mount -b "$1" | sed 's/^.* at \(.*\)\.$/\1/'; }
+
+unmount() {
+	trap - INT TERM EXIT
+	udisksctl loop-delete -b "$innerloop"
+	udisksctl unmount -b "$outerloop"
+	udisksctl loop-delete -b "$outerloop"
+}
+
+export LC_ALL=C
+
+if ! [[ -f "$squashfile" ]]; then
+	echo "Usage: squashdisk-mount <SQUASHDISK_FILE>" >&2
+	exit 1
+fi
+
+outerloop=$(loopsetup "$squashfile")
+mountpoint=$(loopmount "$outerloop")
+innerloop=$(loopsetup  "$mountpoint"/"$diskimage")
+
+echo "$outerloop"
+echo "$mountpoint"
+echo "$innerloop"
+
+trap 'unmount' INT TERM EXIT
+
+# https://stackoverflow.com/a/78625545/624066
+sleep infinity
