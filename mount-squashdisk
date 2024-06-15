@@ -7,6 +7,7 @@
 # License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
 
 squashfile=${1:-}
+partition=${2:-}
 
 diskimage=disk.img
 self=${0##*/}
@@ -14,6 +15,7 @@ self=${0##*/}
 #------------------------------------------------------------------------------
 
 fatal()     { if (($#)); then echo "$@" >&2; usage 1 >&2; fi; }
+integer()   { [[ "$1" =~ ^[0-9]+$ ]]; }
 usage()     { echo "Usage: ${self} SQUASHDISK_FILE [PARTITION_NUM]"; exit ${1:-0}; }
 
 loopsetup() { LC_ALL=C udisksctl loop-setup -r -f "$1" | grep -Po '/dev/loop\d+'; }
@@ -21,6 +23,9 @@ loopmount() { LC_ALL=C udisksctl mount -b "$1" | sed 's/^.* at \(.*\)\.$/\1/'; }
 
 unmount() {
 	trap - INT TERM EXIT
+	if [[ "$partition" ]]; then
+		udisksctl unmount -b "$partdev"
+	fi
 	udisksctl loop-delete -b "$innerloop"
 	udisksctl unmount -b "$outerloop"
 	udisksctl loop-delete -b "$outerloop"
@@ -34,6 +39,9 @@ for arg in "$@"; do
 done
 
 if ! [[ -f "$squashfile" ]]; then fatal "File not found: $squashfile"; fi
+if [[ "$partition" ]] && ! integer "$partition"; then
+	fatal "PARTITION must be an integer: $partition"
+fi
 
 #------------------------------------------------------------------------------
 
@@ -43,7 +51,18 @@ innerloop=$(loopsetup  "$mountpoint"/"$diskimage")
 
 echo "$outerloop"
 echo "$mountpoint"
-echo "$innerloop"
+
+if [[ "$partition" ]]; then
+	# Partition mount requested, list partition device and mount point
+	partdev=${innerloop}p${partition}
+	mountpart=$(loopmount "$partdev")
+	echo "$partdev"
+	echo "$mountpart"
+else
+	# No partition mount requested, list inner loop device and its partitions
+	lsblk "$innerloop" -lnpb --output NAME,PARTUUID,FSTYPE,UUID,LABEL
+fi
+
 
 trap 'unmount' INT TERM EXIT
 
