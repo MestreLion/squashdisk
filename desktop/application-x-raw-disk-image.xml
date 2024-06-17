@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Define an icon for Squashfs files, for Desktop Environments
+To install this definition:
+xdg-mime install \-\-novendor ./application-x-raw-disk-image.xml
+-->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+	<mime-type type="application/x-raw-disk-image">
+		<generic-icon name="drive-harddisk"/>
+		<!-- Other good candidates:
+		<generic-icon name="drive-removable-media"/>
+		<generic-icon name="drive-multidisk"/>
+		<generic-icon name="application-x-raw-disk-image"/>
+		<generic-icon name="application-x-cd-image"/>
+		-->
+	</mime-type>
+</mime-info>
