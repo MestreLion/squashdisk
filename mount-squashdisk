@@ -3,7 +3,7 @@
 # mount-squashdisk - helper to loopback-mount the disk image in a squashdisk file
 #
 # This file is part of squashdisk, see <https://github.com/MestreLion/squashdisk>
-# Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+# Copyright (C) 2024 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
 # License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
 
 squashfile=${1:-}

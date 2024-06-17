@@ -3,7 +3,7 @@
 # squashdisk - create compressed mountable disk and partition images
 #
 # This file is part of squashdisk, see <https://github.com/MestreLion/squashdisk>
-# Copyright (C) 2023 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
+# Copyright (C) 2024 Rodrigo Silva (MestreLion) <linux@rodrigosilva.com>
 # License: GPLv3 or later, at your choice. See <http://www.gnu.org/licenses/gpl>
 #
 # Requirements and associated Debian/Ubuntu package:
