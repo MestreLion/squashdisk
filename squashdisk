@@ -93,16 +93,10 @@ check_version() {
 	if [[ "$vmax" != "$vcur" ]]; then return 1; fi
 }
 
-device_name() {
-	local source=$1
-	# udisksctl info -b "$source" | grep '^ *Drive:' | cut -d\' -f2
-	udevadm info --query=property "$source" | grep '^ID_SERIAL=' | cut -d= -f2
-	local line
-	declare -A dev
-	while IFS= read -r line; do dev[${line%%=*}]=${line#*=}; done < <(
-		udevadm info --query=property "$source"
-	)
-#lsblk -pbd /dev/{sd?,nvme0n1} -o TYPE,SIZE,VENDOR,MODEL,SERIAL,LABEL,PARTLABEL,FSTYPE,RM,ROTA
+# "There are only two hard things in Computer Science: cache invalidation and naming things."
+# https://www.martinfowler.com/bliki/TwoHardThings.html
+# Reference:
+# lsblk -pbd /dev/{sd?,nvme0n1} -o TYPE,SIZE,VENDOR,MODEL,SERIAL,LABEL,PARTLABEL,FSTYPE,RM,ROTA
 #TYPE          SIZE VENDOR   MODEL                                    SERIAL          LABEL              PARTLABEL FSTYPE  RM ROTA
 #disk 4000787030016 ATA      ST4000DM004-2CV1                         ZFN46CS1                                              0    1
 #disk 4000787030016 ATA      ST4000DM004-2CV1                         ZTT363LZ                                              0    1
@@ -110,25 +104,24 @@ device_name() {
 #disk  512110190592 ATA      SSD 512GB                                202101280011                                          0    0
 #disk    8054112256 Generic  Flash Disk                               DFB1FB32        Ubuntu Unity 22.04           iso9660  1    1
 #disk 2000398934016          Samsung SSD 970 EVO Plus 2TB             S59CNM0R904308X                                       0    0
-
-# udevadm does not give SIZE for disks (and only sectors for partitions
-# lsblk lies about VENDOR, may say "ATA"/"ATAPI" for Hard/CD Drives without ID_VENDOR
-
-# Disk name:
-# {LABEL - }SIZE {VENDOR }{MODEL}{-SERIAL}
-
-# Partition name:
-# LABEL{ - }PARTLABEL
-
-# Size:
-# numfmt --to=si --round=down --suffix=B --format '%.0f' 8054112256
-}
-
-
-device_partitions() {
-	local device=$1
-	sudo lsblk "$device" --list --noheadings --paths --output NAME,TYPE,FSTYPE |
-		awk '$2 ~ "part" && $3'
+#TYPE           SIZE VENDOR   MODEL                                    SERIAL           LABEL PARTLABEL FSTYPE RM ROTA
+#disk  4000787030016 ATA      ST4000DM004-2CV1                         ZFN46CS1                                 0    1
+#disk 14000519643136 ATA      ST14000NM000J-2T                         ZR90AYRF                                 0    1
+#disk   480103981056 KINGSTON  SA400S37480G                            50026B778433E738                         0    0
+#disk  2000398934016          Samsung SSD 970 EVO Plus 2TB             S59CNM0R904308X                          0    0
+device_name() {
+	local source=$1
+	LC_ALL=C udisksctl info -b "$source" | grep -Po "^ *Drive: *'.*/\K[^']+"
+	# Limitations:
+	# - Based on udev, only works for actual physical devices
+	# - No SIZE info for disks (and only sectors for partitions)
+	# Same output:
+	# udevadm info --query=property "$source" | grep '^ID_SERIAL=' | cut -d= -f2
+	# Alternative: lsblk
+	# - lies about VENDOR, may say "ATA"/"ATAPI" for Hard/CD Drives without ID_VENDOR
+	# - Disk name: {LABEL - }SIZE {VENDOR }{MODEL}{-SERIAL}
+	# - Partition name: LABEL{ - }PARTLABEL
+	# - Size: numfmt --to=si --round=down --suffix=B --format '%.0f' {SIZE}
 }
 
 #------------------------------------------------------------------------------
