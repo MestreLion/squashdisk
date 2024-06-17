@@ -2,7 +2,7 @@
 <!--
 Define an icon for Squashfs files, for Desktop Environments
 To install this definition:
-xdg-mime install \-\-novendor ./squashfs.xml
+xdg-mime install \-\-novendor ./application-vnd-squashfs.xml
 -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
 	<mime-type type="application/vnd.squashfs">
