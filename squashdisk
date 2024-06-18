@@ -246,18 +246,18 @@ gid=$group
 if ! integer "$uid"; then uid=$(id -u "$uid"); fi
 if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
 
-pvcmd=(dd status=progress iflag=fullblock,count_bytes bs="$block")
+pvcmd=(pv --buffer-size "$block")
 if ((size)); then
-	pvcmd+=(count="$size")
+	pvcmd+=(--size "$size" --stop-at-size)
 fi
-## as modern mksquashfs captures stderr from pv, we need to force it if in a terminal
-#if [[ -t 2 ]]; then
-#	pvcmd+=(--force)
-#fi
+# as modern mksquashfs captures stderr from pv, we need to force it if in a terminal
+if [[ -t 2 ]]; then
+	pvcmd+=(--force)
+fi
 if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; then
 	pvcmd=(sudo "${pvcmd[@]}")
 fi
-pvcmd+=(if="$(escape "$source")")
+pvcmd+=(-- "$(escape "$source")")
 
 pseudo="disk.img f $mode $uid $gid ${pvcmd[*]}"
 
