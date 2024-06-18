@@ -49,6 +49,9 @@ autosudo=1
 force=0
 info=1
 
+pv=pv
+mksquashfs=mksquashfs
+
 verbose=0
 
 #------------------------------------------------------------------------------
@@ -88,7 +91,7 @@ require() {
 }
 check_version() {
 	local vref=$1
-	local vcur=$(mksquashfs -version | head -n1 | cut -d' ' -f3)
+	local vcur=$("$mksquashfs" -version | head -n1 | cut -d' ' -f3)
 	local vmax=$(printf "%s\n" "$vcur" "$vref" | LC_ALL=C sort --version-sort | tail -n1)
 	if [[ "$vmax" != "$vcur" ]]; then return 1; fi
 }
@@ -185,12 +188,17 @@ while (($#)); do
 	-O|--output-dir) shift; outdir=${1:-};;
 	-c|--compressor) shift; comp=${1:-};;
 	-i|--include   ) shift; srcdir=${1:-};;
+	-p|--pv        ) shift; pv=${1:-};;
+	-m|--mksquashfs) shift; mksquashfs=${1:-};;
+
 	--block-size=*) block=${1#*=};;
 	--size=*      ) size=${1#*=};;
 	--output=*    ) outfile=${1#*=};;
 	--output-dir=*) outdir=${1#*=};;
 	--compressor=*) comp=${1#*=};;
 	--include=*   ) srcdir=${1#*=};;
+	--pv=*        ) pv=${1#*=};;
+	--mksquashfs=*) mksquashfs=${1#*=};;
 	--) shift; break;;
 	-*) invalid "$1";;
 	* ) args+=( "$1" );;
@@ -246,14 +254,14 @@ gid=$group
 if ! integer "$uid"; then uid=$(id -u "$uid"); fi
 if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
 
-pvcmd=(pv --buffer-size "$block")
+pvcmd=("$(escape "$pv")" --buffer-size "$block")
 if ((size)); then
 	pvcmd+=(--size "$size" --stop-at-size)
 fi
 # as modern mksquashfs captures stderr from pv, we need to force it if in a terminal
-if [[ -t 2 ]]; then
-	pvcmd+=(--force)
-fi
+#if [[ -t 2 ]]; then
+#	pvcmd+=(--force)
+#fi
 if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; then
 	pvcmd=(sudo "${pvcmd[@]}")
 fi
@@ -300,4 +308,4 @@ fi
 
 trap ERR  # disable error handling to allow graceful CTRL+C during mksquashfs
 # Argument order matters! mksquashfs mandates: SOURCE(s)... TARGET [OPTIONS] [-p ...]
-trace mksquashfs "$srcdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
+trace "$mksquashfs" "$srcdir" "$target" "${permopts[@]}" -info -comp "$comp" -p "$pseudo"
