@@ -65,8 +65,6 @@ build_new_pv() {
 	local v=; if [[ "$version" != main ]]; then v=v; fi
 	switch_version "${v}${version}"
 	cd "$dir"
-	sed -i 's/0\.21/0.19/' -- configure.ac
-	rm po/Makefile.in.in
 	autoreconf -is
 	sh ./configure
 	make
