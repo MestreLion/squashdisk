@@ -254,18 +254,36 @@ gid=$group
 if ! integer "$uid"; then uid=$(id -u "$uid"); fi
 if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
 
+# ------------------------
+# PV command assembly
 pvcmd=("$(escape "$pv")" --buffer-size "$block")
+pvlabel="Reading"
+pvsource=(-- "$(escape "$source")")
 if ((size)); then
-	pvcmd+=(--size "$size" --stop-at-size)
+	# Size requested, stop at it. Size itself is added later
+	pvcmd+=(--stop-at-size)
+else
+	# Size not requested, but try to find out for display purposes (ETA, label)
+	if   [[ -b "$source" ]]; then size=$(lsblk -ndbo SIZE -- "$source")
+	elif [[ -f "$source" ]]; then size=$(stat -c%s -- "$source")  # pv -s @"$source"
+	fi
 fi
-# as modern mksquashfs captures stderr from pv, we need to force it if in a terminal
-#if [[ -t 2 ]]; then
-#	pvcmd+=(--force)
-#fi
+if ((size)); then
+	# Add size (requested or figured out) and update label
+	pvcmd+=(--size "$size")
+	pvlabel+=" $(numfmt --to iec-i "$size")B"
+fi
+pvname=(--name "$(escape "$pvlabel")")
+
+# On some systems an incompatibility between pv > 1.6.6 and mksquashfs > 1.4.5
+# when using sudo prevents terminal progress output. So we have to be "creative"
+# (--force does not seem to make any difference in any case)
 if ((autosudo)) && [[ "$source" != '-' && -e "$source" && ! -r "$source" ]]; then
-	pvcmd=(sudo "${pvcmd[@]}")
+	pvcmd=(sudo "${pvcmd[@]}" --quiet "${pvsource[@]}" '|' "${pvcmd[@]}" "${pvname[@]}")
+else
+	pvcmd+=("${pvname[@]}" "${pvsource[@]}")
 fi
-pvcmd+=(-- "$(escape "$source")")
+# ------------------------
 
 pseudo="disk.img f $mode $uid $gid ${pvcmd[*]}"
 
@@ -276,7 +294,6 @@ permopts=(
 	-force-uid "$uid"
 	-force-gid "$gid"
 )
-
 
 if [[ "$srcdir" ]] && ! [[ -d "$srcdir" ]]; then
 	argerr "--include argument is not a directory: $srcdir"
