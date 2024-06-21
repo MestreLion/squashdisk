@@ -23,6 +23,8 @@ mkdir -p -- "$outdir"
 escape()  { printf '%q' "$1"; }  # $@ will not work as expected
 
 run() {
+	# Quick-run:
+	# mksquashfs empty/ a.sqsh -info -p 'z f 444 0 0 sudo pv -Ss 10G /dev/zero'
 	pseudo="zeroes.img f 444 0 0 sudo $(escape "$pv") -Ss 10G /dev/zero"
 	tmpfile=${outdir}/test_${mksquashfs##*/}_${pv##*/}.sqsh
 	rm -f "$tmpfile"
