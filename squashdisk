@@ -36,7 +36,6 @@ source=
 target=
 srcdir=  # if info, must be writable
 
-block=1Mi  # Block size. 1MiB is a good default, usually better than 32M for SSDs
 comp=zstd
 user=0
 group=0
@@ -44,12 +43,14 @@ mode=444  # octal mode for the disk image created inside the squashfs file
 fsroot_mode=775
 wash=0
 
+block=0  # Block/Buffer size. 1MiB is a good default, usually better than 32M for SSDs
 size=0
 autosudo=1
 force=0
 info=1
 
 pv=pv
+pvlabel="Reading"
 mksquashfs=mksquashfs
 
 verbose=0
@@ -149,9 +150,9 @@ usage() {
 	  -v|--verbose   - print more details about what is being done.
 	  -f|--force     - force operation on mounted partitions or non-disk/patition inputs
 	  -S|--no-sudo   - do not use 'sudo' for reading SOURCE devices even if needed
-	  -s|--size SIZE - number of BYTES (*NOT* blocks!) to read from SOURCE.
-	                   0 means the whole input [Default: $size]
-	  -B|--block-size SIZE - read SIZE blocks at a time. [Default: $block]
+	  -s|--size SIZE - number of BYTES (*NOT* blocks!) to read from SOURCE,
+	                   or 0 for the whole input (default).
+	  -B|--block-size SIZE - read SIZE blocks at a time. Default chosen by `pv'.
 	  -c|--compressor COMP - select COMP compressor [Default: $comp]
 	  -i|--include DIR     - include contents of directory DIR in filesystem root
 
@@ -256,9 +257,11 @@ if ! integer "$gid"; then gid=$(grep "^${gid}:" /etc/group | cut -d: -f3); fi
 
 # ------------------------
 # PV command assembly
-pvcmd=("$(escape "$pv")" --buffer-size "$block")
-pvlabel="Reading"
+pvcmd=("$(escape "$pv")")
 pvsource=(-- "$(escape "$source")")
+if ((block)); then
+	pvcmd+=(--buffer-size "$block")
+fi
 if ((size)); then
 	# Size requested, stop at it. Size itself is added later
 	pvcmd+=(--stop-at-size)
