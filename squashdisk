@@ -149,12 +149,13 @@ usage() {
 	  -h|--help      - show this page.
 	  -v|--verbose   - print more details about what is being done.
 	  -f|--force     - force operation on mounted partitions or non-disk/patition inputs
-	  -S|--no-sudo   - do not use 'sudo' for reading SOURCE devices even if needed
+	                   and skip read errors.
+	  -S|--no-sudo   - do not use 'sudo' for reading SOURCE devices even if needed.
 	  -s|--size SIZE - number of BYTES (*NOT* blocks!) to read from SOURCE,
 	                   or 0 for the whole input (default).
 	  -B|--block-size SIZE - read SIZE blocks at a time. Default chosen by `pv'.
 	  -c|--compressor COMP - select COMP compressor [Default: $comp]
-	  -i|--include DIR     - include contents of directory DIR in filesystem root
+	  -i|--include DIR     - include contents of directory DIR in filesystem root.
 
 	  -o|--output     FILE Create output file as FILE
 	  -O|--output-dir DIR  Create output file in DIR
@@ -261,6 +262,9 @@ pvcmd=("$(escape "$pv")")
 pvsource=(-- "$(escape "$source")")
 if ((block)); then
 	pvcmd+=(--buffer-size "$block")
+fi
+if ((force)); then
+	pvsource=(--skip-errors "${pvsource[@]}")
 fi
 if ((size)); then
 	# Size requested, stop at it. Size itself is added later
