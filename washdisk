@@ -49,7 +49,7 @@ wash_partition() {
 		unmount=1
 	fi
 	mountpoint=$(
-		LC_ALL=C udisksctl info --block-device "$partition" |
+		udisksctl info --block-device "$partition" |
 		grep -Po '^ *MountPoints: *\K.*'
 	)
 	if [[ -z "$mountpoint" ]]; then
