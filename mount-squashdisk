@@ -19,7 +19,11 @@ integer()   { [[ "$1" =~ ^[0-9]+$ ]]; }
 usage()     { echo "Usage: ${self} SQUASHDISK_FILE [PARTITION_NUM]"; exit ${1:-0}; }
 
 loopsetup() { LC_ALL=C udisksctl loop-setup -r -f "$1" | grep -Po '/dev/loop\d+'; }
-loopmount() { LC_ALL=C udisksctl mount -o ro -b "$1" | sed 's/^.* at \(.*\)\.$/\1/'; }
+loopmount() {
+	local mp
+	mp=$(LC_ALL=C udisksctl mount -o ro -b "$1" | sed 's/^.* at \(.*\)$/\1/')
+	if [[ "$mp" ]]; then echo "${mp%.}"; else return 1; fi
+}
 
 unmount() {
 	trap - INT TERM EXIT
